@@ -1,0 +1,125 @@
+# Brawl Stats Bot – Данные (ветка `brawl_data`)
+
+Эта ветка содержит все данные, используемые API Brawl Stats Bot. Данные организованы в папке `brawl_data`.
+
+## 📁 Структура папок
+
+```
+brawl_data/
+├── players/               # JSON-файлы игроков
+├── clubs/                 # JSON-файлы клубов
+├── trophy_history/        # История трофеев игроков
+├── club_history/          # История клубов
+├── battles/               # Данные о боях
+├── player_brawler_stats/  # Статистика бойцов по игрокам
+├── team_stats/            # Командная статистика
+├── rankings/              # Ежедневные рейтинги
+└── map_stats.json         # Агрегированная статистика карт
+```
+
+## 📄 Форматы данных
+
+### `players/{tag}.json`
+Полный объект игрока из официального API Brawl Stars.
+
+### `clubs/{tag}.json`
+Полный объект клуба.
+
+### `trophy_history/{tag}.json`
+```json
+[
+  { "date": "2025-03-28", "trophies": 32000 },
+  { "date": "2025-03-27", "trophies": 31850 }
+]
+```
+
+### `club_history/{tag}.json`
+```json
+[
+  {
+    "date": "2025-03-28",
+    "trophies": 950000,
+    "member_count": 30,
+    "required_trophies": 10000
+  }
+]
+```
+
+### `battles/{tag}.json`
+```json
+[
+  {
+    "battle_time": "2025-03-28T14:23:00Z",
+    "battle_type": "solo",
+    "result": "victory",
+    "trophies_change": 8,
+    "brawler_id": 16000002,
+    "map_name": "Canyon",
+    "game_mode": "Showdown",
+    "teammates": [],
+    "opponents": ["#ABC123"]
+  }
+]
+```
+
+### `player_brawler_stats/{tag}.json`
+```json
+[
+  {
+    "brawler_id": 16000000,
+    "brawler_name": "Shelly",
+    "trophies": 750,
+    "highest_trophies": 780,
+    "power": 11,
+    "rank": 24
+  }
+]
+```
+
+### `team_stats/{hash}.json`
+```json
+{
+  "player_tags": ["#8UG9C0L", "#2YCCU"],
+  "total_battles": 42,
+  "total_wins": 28,
+  "last_updated": "2025-03-28T12:00:00Z"
+}
+```
+
+### `rankings/players/{date}.json`
+```json
+{
+  "date": "2025-03-28",
+  "players": [
+    { "tag": "#8UG9C0L", "trophies": 32000 }
+  ]
+}
+```
+
+### `rankings/clubs/{date}.json`
+Аналогично с полями `tag`, `name`, `trophies`.
+
+### `map_stats.json`
+```json
+[
+  {
+    "map_name": "Canyon",
+    "game_mode": "Showdown",
+    "total_battles": 1240,
+    "total_wins": 620,
+    "avg_trophies_change": 5.2,
+    "win_rate": 50.0
+  }
+]
+```
+
+## 🔄 Обновление данных
+
+Данные в этой ветке обновляются автоматически фоновыми задачами API. Ручное редактирование не рекомендуется – изменения могут быть перезаписаны.
+
+---
+
+**Связанные репозитории:**  
+- Код API: [ветка main](https://github.com/egoffn1/BrawlStatsBot/tree/main)  
+- Данные: [ветка brawl_data](https://github.com/egoffn1/BrawlStatsBot/tree/brawl_data)
+```
