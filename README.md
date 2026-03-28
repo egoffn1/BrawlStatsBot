@@ -23,6 +23,10 @@
     <img src="https://img.shields.io/badge/Database-PostgreSQL-blueviolet" alt="PostgreSQL">
     <img src="https://img.shields.io/badge/Cache-Redis-red" alt="Redis">
   </p>
+  <p>
+    📦 Все данные (игроки, клубы, история) хранятся в отдельной ветке  
+    <strong><a href="https://github.com/egoffn1/BrawlStatsBot/tree/brawl_data/brawl_data">brawl_data</a></strong>
+  </p>
 </div>
 
 ---
