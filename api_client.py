@@ -33,7 +33,8 @@ class BrawlAPIClient:
 
     @property
     def has_keys(self) -> bool:
-        return bool(self.api_keys) or bool(self.api_key)
+        # Для BrawlNest API достаточно api_key, для официального Brawl Stars API нужны api_keys
+        return bool(self.api_key) or bool(self.api_keys)
 
     @staticmethod
     def normalize_tag(tag: str) -> str:
@@ -75,7 +76,12 @@ class BrawlAPIClient:
     async def _request(self, endpoint: str, use_cache: bool = True,
                         cache_ttl: int = 300, method: str = "GET",
                         json_body: Optional[Dict] = None) -> Optional[Dict]:
-        """Выполняет запрос к API с поддержкой разных методов и аутентификации."""
+        """Выполняет запрос к API с поддержкой разных методов и аутентификации.
+        
+        Сервер BrawlNest требует передачу API-ключа через query-параметр api_key
+        для большинства эндпоинтов. Для некоторых GET-запросов (brawlers) работает
+        заголовок X-API-Key.
+        """
         if not self.has_keys:
             return None
         
@@ -88,22 +94,18 @@ class BrawlAPIClient:
         key = self._current_key()
         url = f"{BASE_URL}/{endpoint.lstrip('/')}"
         
-        # Подготовка заголовков с поддержкой X-API-Key и fallback на Authorization
-        headers = {}
+        # Подготовка параметров и заголовков
         params = {}
+        headers = {}
         
-        # Приоритет: X-API-Key заголовок
-        if key:
-            headers["X-API-Key"] = key
-        
-        # Fallback: query параметр api_key (если сервер требует)
-        if key and endpoint.startswith("my_status"):
-            params["api_key"] = key
-        
-        # Для официального Brawl Stars API используем Authorization header
-        if self.api_keys and not self.api_key:
+        # Приоритет: X-API-Key заголовок (для BrawlNest REST API)
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+            # Передаём ключ также в query-параметре для совместимости
+            params["api_key"] = self.api_key
+        elif key:
+            # Для официального Brawl Stars API используем Authorization header
             headers["Authorization"] = f"Bearer {key}"
-            headers.pop("X-API-Key", None)
         
         if json_body:
             headers["Content-Type"] = "application/json"
