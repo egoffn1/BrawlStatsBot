@@ -136,20 +136,39 @@ def save_search_mode(mode: str):
 # BrawlNest REST API client
 # ═══════════════════════════════════════════════════════════════════
 
-async def _nest_get(path: str, params: Optional[Dict] = None) -> Optional[Any]:
-    """GET к BrawlNest REST API."""
+async def _nest_get(path: str, params: Optional[Dict] = None, use_query_key: bool = False) -> Optional[Any]:
+    """GET к BrawlNest REST API.
+    
+    Args:
+        path: Путь к эндпоинту
+        params: Дополнительные query-параметры
+        use_query_key: Если True, передавать ключ через query-параметр api_key вместо заголовка
+    """
     if not API_KEY:
         return None
     url = f"{BASE_URL}{path}"
-    headers = {"X-API-Key": API_KEY}
+    
+    # Подготовка параметров
     if params is None:
         params = {}
+    
+    # Выбор способа передачи ключа: заголовок (приоритет) или query-параметр
+    if use_query_key:
+        params = {**params, "api_key": API_KEY}
+        headers = {}
+    else:
+        headers = {"X-API-Key": API_KEY}
+    
     try:
         async with aiohttp.ClientSession() as sess:
             async with sess.get(url, headers=headers, params=params,
                                 timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status == 200:
                     return await resp.json()
+                # Если получили 401 с заголовком, пробуем с query-параметром
+                if resp.status == 401 and not use_query_key:
+                    logger.debug(f"BrawlNest GET {path} → 401, пробуем query-параметр")
+                    return await _nest_get(path, params, use_query_key=True)
                 logger.debug(f"BrawlNest GET {path} → {resp.status}")
     except Exception as e:
         logger.debug(f"BrawlNest GET error {path}: {e}")
@@ -157,12 +176,31 @@ async def _nest_get(path: str, params: Optional[Dict] = None) -> Optional[Any]:
 
 
 async def _nest_post(path: str, json_body: Optional[Dict] = None,
-                     params: Optional[Dict] = None) -> Optional[Any]:
-    """POST к BrawlNest REST API."""
+                     params: Optional[Dict] = None, use_query_key: bool = False) -> Optional[Any]:
+    """POST к BrawlNest REST API.
+    
+    Args:
+        path: Путь к эндпоинту
+        json_body: Тело запроса (JSON)
+        params: Дополнительные query-параметры
+        use_query_key: Если True, передавать ключ через query-параметр api_key вместо заголовка
+    """
     if not API_KEY:
         return None
     url = f"{BASE_URL}{path}"
-    headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
+    
+    # Подготовка параметров и заголовков
+    if params is None:
+        params = {}
+    
+    headers = {"Content-Type": "application/json"}
+    
+    # Выбор способа передачи ключа
+    if use_query_key:
+        params = {**params, "api_key": API_KEY}
+    else:
+        headers["X-API-Key"] = API_KEY
+    
     try:
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, headers=headers, json=json_body,
@@ -170,6 +208,11 @@ async def _nest_post(path: str, json_body: Optional[Dict] = None,
                                  timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status in (200, 201):
                     return await resp.json()
+                # Если получили 401 с заголовком, пробуем с query-параметром
+                if resp.status == 401 and not use_query_key:
+                    logger.debug(f"BrawlNest POST {path} → 401, пробуем query-параметр")
+                    return await _nest_post(path, json_body, params, use_query_key=True)
+                logger.debug(f"BrawlNest POST error {path}: status={resp.status}")
     except Exception as e:
         logger.debug(f"BrawlNest POST error {path}: {e}")
     return None
