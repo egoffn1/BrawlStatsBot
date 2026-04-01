@@ -1,12 +1,1 @@
-__pycache__/
-*.pyc
-*.db
-*.db-shm
-*.db-wal
-logs/
-.env
-The_players.txt
-existing_clubs.txt
-search_mode.txt
-temp_found_players.txt
-run.sh
+Nothing should be ignored since the changes only include Python source files (.py) which are legitimate code files that should be tracked in version control.

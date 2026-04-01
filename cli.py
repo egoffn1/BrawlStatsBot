@@ -1188,6 +1188,176 @@ async def check_team_code():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# TEAM CODES - Local Generation (Brawl Stars style)
+# ═══════════════════════════════════════════════════════════════════
+
+import random
+import string
+from datetime import timedelta
+
+# Base25 charset: 0-9, A-Z excluding I and O
+BASE25_CHARS = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+def generate_brawl_code(length: int = 7) -> str:
+    """Генерирует код команды в стиле Brawl Stars.
+    
+    Спецификация:
+    - Префикс: XM
+    - Символы: Base25 (0-9, A-Z, исключая I и O)
+    - Длина: 7, 8 или 9 символов (без префикса)
+    """
+    length = max(7, min(9, length))  # Ограничиваем длину 7-9
+    random_part = ''.join(random.choices(BASE25_CHARS, k=length))
+    return f"XM{random_part}"
+
+async def generate_team_codes_cli(count: int = None):
+    """CLI команда для генерации кодов команды с сохранением в БД и Git."""
+    from database import Database
+    
+    if count is None:
+        count = await _ask_int("Количество кодов для генерации (1-20)", 5)
+    count = max(1, min(20, count))
+    
+    db = Database()
+    await db.connect()
+    
+    generated_codes = []
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(hours=10)).isoformat()  # Ровно 10 часов
+    
+    console.print()
+    _hr(f"🔑 Генерация {count} кодов команды")
+    
+    with Progress(TextColumn("[progress.description]{task.description}"), 
+                  BarColumn(), TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                  console=console, transient=True) as progress:
+        task = progress.add_task("[cyan]Генерация кодов...", total=count)
+        
+        for i in range(count):
+            # Пробуем сгенерировать уникальный код
+            max_attempts = 10
+            for attempt in range(max_attempts):
+                code = generate_brawl_code(random.choice([7, 8, 9]))
+                
+                # Проверяем на дубликаты в БД
+                if not await db.exists_active_team_code(code):
+                    # Сохраняем в БД
+                    await db.insert_team_code(code, expires_at, creator="cli")
+                    generated_codes.append({
+                        "code": code,
+                        "created_at": now.isoformat(),
+                        "expires_at": expires_at,
+                        "is_used": False
+                    })
+                    break
+                
+            progress.advance(task)
+    
+    await db.close()
+    
+    if generated_codes:
+        _ok(f"Сгенерировано {len(generated_codes)} кодов")
+        console.print()
+        
+        # Выводим сгенерированные коды
+        t = Table(box=box.MINIMAL, show_header=True, header_style="dim")
+        t.add_column("#", style="dim")
+        t.add_column("Код", style="bold #facc15")
+        t.add_column("Истекает", style="dim")
+        
+        for idx, code_data in enumerate(generated_codes, 1):
+            exp_str = code_data["expires_at"][:19].replace("T", " ")
+            t.add_row(str(idx), code_data["code"], exp_str)
+        
+        console.print(t)
+        console.print()
+        
+        # Экспорт в JSON для Git
+        try:
+            gh_sync = GitHubSync()
+            await gh_sync.export_team_codes(generated_codes)
+            gh_sync.commit_and_push(f"Add {len(generated_codes)} team codes")
+            _info("Коды экспортированы в GitHub")
+        except Exception as e:
+            _info(f"Экспорт в GitHub: {e}")
+        
+        await _add_rating("generate_codes")
+    else:
+        _err("Не удалось сгенерировать коды (возможно все комбинации заняты)")
+    
+    _hr()
+    console.print()
+    await _press_enter_to_continue()
+
+async def list_team_codes():
+    """CLI команда для просмотра активных кодов."""
+    from database import Database
+    
+    db = Database()
+    await db.connect()
+    
+    codes = await db.get_active_team_codes()
+    await db.close()
+    
+    console.print()
+    _hr(f"📋 Активные коды команды ({len(codes)})")
+    
+    if not codes:
+        _info("Нет активных кодов")
+    else:
+        t = Table(box=box.MINIMAL, show_header=True, header_style="dim")
+        t.add_column("Код", style="bold #facc15")
+        t.add_column("Создан", style="dim")
+        t.add_column("Истекает", style="dim")
+        t.add_column("Автор", style="dim")
+        
+        for code in codes:
+            created = code.get("created_at", "?")[:19].replace("T", " ")
+            expires = code.get("expires_at", "?")[:19].replace("T", " ")
+            creator = code.get("creator", "-")
+            t.add_row(code["code"], created, expires, creator or "-")
+        
+        console.print(t)
+    
+    _hr()
+    console.print()
+    await _press_enter_to_continue()
+
+async def cleanup_expired_codes():
+    """CLI команда для очистки истекших кодов."""
+    from database import Database
+    
+    db = Database()
+    await db.connect()
+    
+    deleted_count = await db.cleanup_expired_team_codes()
+    await db.close()
+    
+    console.print()
+    _hr("🧹 Очистка старых кодов")
+    
+    if deleted_count > 0:
+        _ok(f"Удалено {deleted_count} истекших кодов")
+        
+        # Синхронизация с Git после очистки
+        try:
+            gh_sync = GitHubSync()
+            # Обновляем exported файл
+            active_codes = await db.get_active_team_codes()
+            await gh_sync.export_team_codes(active_codes)
+            gh_sync.commit_and_push(f"Cleanup expired team codes (-{deleted_count})")
+            _info("Изменения отправлены в GitHub")
+        except Exception as e:
+            _info(f"Синхронизация с GitHub: {e}")
+    else:
+        _info("Нет истекших кодов для удаления")
+    
+    _hr()
+    console.print()
+    await _press_enter_to_continue()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # NODES / NETWORK
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1758,7 +1928,10 @@ MENU_ITEMS = [
     ("rank_clubs_brawl",  "🏅 Топ клубов (глобальный)"),
     ("locations",         "🌍 Список стран"),
     ("powerplay",         "⚡ Сезоны Power Play"),
-    ("gen_team_code",     "🔑 Создать код команды"),
+    ("gen_codes",         "🔑 Генерация кодов команды"),
+    ("list_codes",        "📋 Список активных кодов"),
+    ("cleanup_codes",     "🧹 Очистить старые коды"),
+    ("gen_team_code",     "🔐 Создать код команды (API)"),
     ("check_team_code",   "✅ Проверить код команды"),
     ("gen_random_codes",  "🎲 Генерация случайных кодов"),
     ("my_rating",         "⭐ Мой рейтинг"),
@@ -2142,6 +2315,15 @@ async def interactive_menu():
 
         elif choice == "powerplay":
             await show_powerplay_seasons()
+
+        elif choice == "gen_codes":
+            await generate_team_codes_cli()
+
+        elif choice == "list_codes":
+            await list_team_codes()
+
+        elif choice == "cleanup_codes":
+            await cleanup_expired_codes()
 
         elif choice == "gen_team_code":
             await generate_team_code()

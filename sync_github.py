@@ -1,6 +1,7 @@
 """
 Синхронизация локальной базы данных с GitHub.
 Экспортирует SQLite в JSON-файлы, коммитит и пушит изменения.
+Данные хранятся в ветке brawl_data в папке brawl_data/brawl_data/...
 """
 import os
 import json
@@ -9,18 +10,20 @@ import aiosqlite
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import git
 from git.exc import InvalidGitRepositoryError, GitCommandError
 
-from config import DB_PATH, GITHUB_REPO_URL, GITHUB_TOKEN, APP_CFG
+from config import DB_PATH, GITHUB_REPO_URL, GITHUB_TOKEN, APP_CFG, GITHUB_BRANCH
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
 class GitHubSync:
-    def __init__(self, repo_url: Optional[str] = None, token: Optional[str] = None):
+    """Синхронизация данных с удаленным репозиторием GitHub."""
+    
+    def __init__(self, repo_url: Optional[str] = None, token: Optional[str] = None, branch: str = None):
         # Отключаем прокси для git
         os.environ["http_proxy"] = ""
         os.environ["https_proxy"] = ""
@@ -31,7 +34,12 @@ class GitHubSync:
 
         self.repo_url = repo_url or GITHUB_REPO_URL
         self.token = token or GITHUB_TOKEN
-        self.data_dir = Path(APP_CFG.get("sync_data_dir", "brawl_data"))
+        self.branch = branch or GITHUB_BRANCH or "brawl_data"
+        
+        # Структура: brawl_data/brawl_data/... (players, battles, clubs, team_codes)
+        self.base_dir = Path("brawl_data")
+        self.data_dir = self.base_dir / "brawl_data"
+        
         self.local_path = Path(".").absolute()
         self.repo: Optional[git.Repo] = None
 
@@ -42,12 +50,19 @@ class GitHubSync:
         if self.repo_url.endswith("/"):
             self.repo_url = self.repo_url.rstrip("/")
 
-        self.data_dir.mkdir(exist_ok=True)
+        # Создаем структуру папок
+        self._ensure_data_structure()
+        self._clear_git_proxy()
+
+    def _ensure_data_structure(self):
+        """Создает необходимую структуру папок для данных."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         (self.data_dir / "players").mkdir(exist_ok=True)
         (self.data_dir / "clubs").mkdir(exist_ok=True)
         (self.data_dir / "battles").mkdir(exist_ok=True)
-
-        self._clear_git_proxy()
+        (self.data_dir / "team_codes").mkdir(exist_ok=True)
+        (self.data_dir / "maps").mkdir(exist_ok=True)
+        (self.data_dir / "brawlers").mkdir(exist_ok=True)
 
     def _clear_git_proxy(self):
         try:
@@ -57,46 +72,108 @@ class GitHubSync:
             pass
 
     def init_repo(self):
+        """Инициализирует локальный репозиторий и настраивает remote."""
         try:
             self.repo = git.Repo(self.local_path)
             origin = self.repo.remotes.origin
-            auth_url = self.repo_url
-            if self.token and self.repo_url.startswith("https://"):
-                auth_url = self.repo_url.replace("https://", f"https://{self.token}@")
+            auth_url = self._get_auth_url()
             if origin.url != auth_url:
                 origin.set_url(auth_url)
+            
+            # Проверяем и переключаемся на нужную ветку
+            self._checkout_branch()
         except InvalidGitRepositoryError:
+            logger.info(f"Initializing new git repository at {self.local_path}")
             self.repo = git.Repo.init(self.local_path)
-            auth_url = self.repo_url
-            if self.token and self.repo_url.startswith("https://"):
-                auth_url = self.repo_url.replace("https://", f"https://{self.token}@")
+            auth_url = self._get_auth_url()
             self.repo.create_remote("origin", auth_url)
-            self._commit_and_push("Initial commit", force_initial=True)
+            self._checkout_branch()
+            
+    def _get_auth_url(self) -> str:
+        """Возвращает URL репозитория с токеном для аутентификации."""
+        if self.token and self.repo_url.startswith("https://"):
+            return self.repo_url.replace("https://", f"https://{self.token}@")
+        return self.repo_url
+    
+    def _checkout_branch(self):
+        """Переключается на целевую ветку или создает её."""
+        if not self.repo:
+            return
+            
+        # Проверяем существует ли ветка локально
+        local_branches = [b.name for b in self.repo.branches]
+        
+        if self.branch not in local_branches:
+            # Пытаемся найти удаленную ветку
+            try:
+                origin = self.repo.remotes.origin
+                origin.fetch()
+                
+                # Проверяем существует ли удаленная ветка
+                remote_branch_exists = any(
+                    ref.name == f"origin/{self.branch}" 
+                    for ref in self.repo.refs
+                )
+                
+                if remote_branch_exists:
+                    # Создаем локальную ветку из удаленной
+                    self.repo.git.checkout('-b', self.branch, f'origin/{self.branch}')
+                    logger.info(f"Checked out remote branch {self.branch}")
+                else:
+                    # Создаем новую ветку
+                    self.repo.git.checkout('-b', self.branch)
+                    logger.info(f"Created new branch {self.branch}")
+            except GitCommandError as e:
+                logger.warning(f"Could not checkout branch {self.branch}: {e}")
+                # Создаем ветку если не удалось получить с remote
+                if self.branch not in [b.name for b in self.repo.branches]:
+                    self.repo.git.checkout('-b', self.branch)
+        else:
+            # Ветка существует локально - переключаемся
+            self.repo.git.checkout(self.branch)
+            
+        logger.info(f"Current branch: {self.repo.active_branch.name}")
 
-    def _commit_and_push(self, message: str, force_initial: bool = False):
+    def commit_and_push(self, message: str, files: Optional[List[str]] = None, force_initial: bool = False):
+        """Коммитит и пушит изменения в удаленный репозиторий."""
         if not self.repo:
             self.init_repo()
         assert self.repo is not None
 
-        self.repo.index.add([str(self.data_dir)])
+        # Если файлы не указаны, добавляем всю директорию data
+        if files:
+            self.repo.index.add(files)
+        else:
+            self.repo.index.add([str(self.data_dir)])
+            
         if self.repo.is_dirty() or force_initial:
             self.repo.index.commit(message)
             origin = self.repo.remotes.origin
             try:
-                origin.push()
+                origin.push(set_upstream=True)
+                logger.info(f"Changes committed and pushed to {self.branch}: {message}")
+                return True
             except GitCommandError as e:
                 if "has no upstream branch" in str(e):
                     current = self.repo.active_branch
                     origin.push(refspec=f"{current.name}:{current.name}", set_upstream=True)
+                    logger.info(f"Pushed new branch {current.name} to remote")
+                    return True
                 else:
                     logger.warning("Push failed, trying pull first...")
-                    origin.pull(rebase=True)
-                    origin.push()
-            logger.info(f"Changes committed and pushed: {message}")
-            return True
-        return False
+                    try:
+                        origin.pull(rebase=True)
+                        origin.push(set_upstream=True)
+                        return True
+                    except GitCommandError as pull_error:
+                        logger.error(f"Pull/push failed: {pull_error}")
+                        return False
+        else:
+            logger.debug("No changes to commit")
+            return False
 
     async def export_data(self):
+        """Экспортирует данные из SQLite в JSON файлы."""
         async with aiosqlite.connect(DB_PATH) as conn:
             conn.row_factory = aiosqlite.Row
 
@@ -179,7 +256,24 @@ class GitHubSync:
 
         logger.info("Data exported to JSON files.")
 
+    async def export_team_codes(self, codes: List[Dict]):
+        """Экспортирует коды команд в JSON файл."""
+        codes_file = self.data_dir / "team_codes" / "active_codes.json"
+        codes_file.parent.mkdir(exist_ok=True)
+        
+        export_data = {
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "total_codes": len(codes),
+            "codes": codes
+        }
+        
+        with open(codes_file, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Exported {len(codes)} team codes to {codes_file}")
+
     async def import_data(self):
+        """Импортирует данные из JSON файлов в SQLite."""
         async with aiosqlite.connect(DB_PATH) as conn:
             # 1. Импорт игроков
             players_dir = self.data_dir / "players"
@@ -263,6 +357,7 @@ class GitHubSync:
         logger.info("Data imported from JSON files.")
 
     async def pull_and_import(self):
+        """Pull из remote и импорт данных."""
         self.init_repo()
         assert self.repo is not None
         origin = self.repo.remotes.origin
@@ -271,6 +366,7 @@ class GitHubSync:
         logger.info("Pulled and imported from GitHub.")
 
     async def export_and_push(self, message: str = "Auto sync from CLI"):
+        """Экспорт данных и push в remote."""
         self.init_repo()
         await self.export_data()
-        self._commit_and_push(message)
+        self.commit_and_push(message)

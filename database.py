@@ -124,6 +124,14 @@ class Database:
                 rating INTEGER DEFAULT 0,
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS team_codes (
+                code TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                is_used INTEGER DEFAULT 0,
+                creator TEXT
+            );
         """)
         await conn.commit()
 
@@ -425,3 +433,67 @@ class Database:
         async with conn.execute(sql, params) as cur:
             rows = await cur.fetchall()
         return [dict(row) for row in rows]
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Team Codes - управление кодами командной игры
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    async def insert_team_code(self, code: str, expires_at: str, creator: Optional[str] = None):
+        """Сохраняет новый код команды в базу."""
+        conn = await self._conn_or_raise()
+        now = datetime.now(timezone.utc).isoformat()
+        await conn.execute("""
+            INSERT INTO team_codes (code, created_at, expires_at, is_used, creator)
+            VALUES (?, ?, ?, 0, ?)
+        """, (code, now, expires_at, creator))
+        await conn.commit()
+
+    async def get_team_code(self, code: str) -> Optional[Dict]:
+        """Получает информацию о коде команды."""
+        conn = await self._conn_or_raise()
+        async with conn.execute(
+            "SELECT * FROM team_codes WHERE code = ?", (code,)
+        ) as cur:
+            row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def get_active_team_codes(self) -> List[Dict]:
+        """Возвращает все активные (неиспользованные и неистекшие) коды."""
+        conn = await self._conn_or_raise()
+        now = datetime.now(timezone.utc).isoformat()
+        async with conn.execute("""
+            SELECT * FROM team_codes 
+            WHERE is_used = 0 AND expires_at > ?
+            ORDER BY created_at DESC
+        """, (now,)) as cur:
+            rows = await cur.fetchall()
+        return [dict(row) for row in rows]
+
+    async def mark_team_code_used(self, code: str):
+        """Отмечает код как использованный."""
+        conn = await self._conn_or_raise()
+        await conn.execute(
+            "UPDATE team_codes SET is_used = 1 WHERE code = ?", (code,)
+        )
+        await conn.commit()
+
+    async def cleanup_expired_team_codes(self) -> int:
+        """Удаляет истекшие коды. Возвращает количество удалённых."""
+        conn = await self._conn_or_raise()
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = await conn.execute(
+            "DELETE FROM team_codes WHERE expires_at <= ?", (now,)
+        )
+        await conn.commit()
+        return cursor.rowcount
+
+    async def exists_active_team_code(self, code: str) -> bool:
+        """Проверяет, существует ли активный код."""
+        conn = await self._conn_or_raise()
+        now = datetime.now(timezone.utc).isoformat()
+        async with conn.execute("""
+            SELECT 1 FROM team_codes 
+            WHERE code = ? AND is_used = 0 AND expires_at > ?
+        """, (code, now)) as cur:
+            row = await cur.fetchone()
+        return row is not None
