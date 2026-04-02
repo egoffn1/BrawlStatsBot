@@ -344,14 +344,14 @@ async def ensure_api_key():
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        if data and data.get("valid"):
+                        if data and data.get("daily_limit"):
                             _ok(f"API ключ действителен (лимит: {data.get('daily_limit', 'N/A')})")
                             return  # ключ рабочий
         except Exception:
             pass
         # ключ невалидный – продолжаем как при отсутствии
         console.print()
-        _info("API ключ недействителен.")
+        _info("API ключ недействителен, генерируем новый...")
         API_KEY = ""  # сбросим
     
     # Проверяем доступность сервера через /health
@@ -391,6 +391,25 @@ async def ensure_api_key():
         _err("Сервер BrawlNest недоступен. Некоторые функции будут ограничены.")
     elif not server_ready:
         _warn("Сервер работает, но некоторые функции могут быть недоступны из-за проблем с БД/Redis")
+    
+    # Пытаемся автоматически получить ключ через /generate_key
+    if server_available:
+        try:
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(
+                    f"{BASE_URL}/generate_key",
+                    json={"name": "CLI_User", "daily_limit": 10000},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        key = data.get("key", "")
+                        if key:
+                            _save_env_key(key)
+                            _ok("API ключ создан и сохранён в .env")
+                            return
+        except Exception as e:
+            logger.debug(f"Не удалось получить ключ автоматически: {e}")
     
     # Предлагаем ввести ключ вручную
     console.print()
@@ -2457,6 +2476,9 @@ async def interactive_menu():
 
 
 async def main():
+    # Создаём .env если отсутствует (перед инициализацией)
+    create_default_env()
+    
     await _init()
     # Автоматическая настройка API-ключа перед началом работы
     await ensure_api_key()
