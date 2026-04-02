@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MapStats",
+  "description": "Schema for map statistics",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["map_name", "game_mode"],
+    "properties": {
+      "map_name": {
+        "type": "string",
+        "description": "Name of the map"
+      },
+      "game_mode": {
+        "type": "string",
+        "enum": ["Showdown", "Gem Grab", "Heist", "Bounty", "Hot Zone", "Knockout", "Brawl Ball", "Volleyball", "Basketball", "Wipeout", "Payload"],
+        "description": "Game mode associated with the map"
+      },
+      "total_battles": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Total battles played on this map"
+      },
+      "total_wins": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Total wins on this map"
+      },
+      "avg_trophies_change": {
+        "type": "number",
+        "description": "Average trophy change per battle"
+      },
+      "win_rate": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Win rate percentage on this map"
+      },
+      "most_played_brawlers": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Most frequently used brawlers on this map"
+      },
+      "last_updated": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  }
+}

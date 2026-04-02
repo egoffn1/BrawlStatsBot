@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PlayerRankings",
+  "description": "Schema for daily player rankings",
+  "type": "object",
+  "required": ["date", "players"],
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of rankings in YYYY-MM-DD format"
+    },
+    "players": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tag", "trophies"],
+        "properties": {
+          "tag": {
+            "type": "string",
+            "pattern": "^#[0-9A-Za-z]{3,}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trophies": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Player",
+  "description": "Schema for player data",
+  "type": "object",
+  "required": ["tag", "name", "trophies"],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "pattern": "^#[0-9A-Za-z]{3,}$",
+      "description": "Player tag starting with #"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Player name"
+    },
+    "trophies": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current trophy count"
+    },
+    "highestTrophies": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Highest trophy count achieved"
+    },
+    "rank": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Player rank"
+    },
+    "club": {
+      "type": "object",
+      "properties": {
+        "tag": {"type": "string"},
+        "name": {"type": "string"}
+      }
+    },
+    "brawlers": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/Brawler"}
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last update"
+    }
+  },
+  "definitions": {
+    "Brawler": {
+      "type": "object",
+      "required": ["id", "name", "trophies"],
+      "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "trophies": {"type": "integer", "minimum": 0},
+        "highestTrophies": {"type": "integer", "minimum": 0},
+        "power": {"type": "integer", "minimum": 1, "maximum": 11},
+        "rank": {"type": "integer", "minimum": 1, "maximum": 35}
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrophyHistory",
+  "description": "Schema for trophy history data",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["date", "trophies"],
+    "properties": {
+      "date": {
+        "type": "string",
+        "format": "date",
+        "description": "Date in YYYY-MM-DD format"
+      },
+      "trophies": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Trophy count on that date"
+      }
+    }
+  }
+}

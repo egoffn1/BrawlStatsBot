@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TeamCode",
+  "description": "Schema for team invitation codes",
+  "type": "object",
+  "required": ["code", "created_at", "expires_at"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{7}$",
+      "description": "7-character alphanumeric team code"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when code was created"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when code expires"
+    },
+    "creator_api_key": {
+      "type": "string",
+      "description": "API key of the creator (masked)"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 3600,
+      "description": "Code validity duration in seconds"
+    },
+    "max_uses": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of times the code can be used"
+    },
+    "current_uses": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current number of uses"
+    }
+  }
+}

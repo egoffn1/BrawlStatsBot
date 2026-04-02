@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Club",
+  "description": "Schema for club data",
+  "type": "object",
+  "required": ["tag", "name", "trophies"],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "pattern": "^#[0-9A-Za-z]{3,}$",
+      "description": "Club tag starting with #"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Club name"
+    },
+    "trophies": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current club trophy count"
+    },
+    "memberCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30,
+      "description": "Number of club members"
+    },
+    "requiredTrophies": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Minimum trophies required to join"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["open", "inviteOnly", "closed"],
+      "description": "Club type"
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tag": {"type": "string"},
+          "name": {"type": "string"},
+          "role": {"type": "string", "enum": ["leader", "coLeader", "member", "elder"]}
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
