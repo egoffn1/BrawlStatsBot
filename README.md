@@ -130,9 +130,57 @@ brawl_data/
 
 Данные в этой ветке обновляются автоматически фоновыми задачами API. Ручное редактирование не рекомендуется – изменения могут быть перезаписаны.
 
+## 🛠️ Утилиты
+
+### Валидация данных
+
+Для проверки корректности данных используйте скрипт валидации:
+
+```bash
+# Запустить валидацию всех данных
+python scripts/validate_data.py
+
+# Запустить тесты валидатора
+python tests/test_validator.py
+```
+
+Валидатор проверяет:
+- ✅ Формат тегов игроков и клубов (начинаются с #)
+- ✅ Форматы дат (YYYY-MM-DD) и datetime (ISO 8601)
+- ✅ Диапазоны значений (трофеи ≥ 0, сила бойцов 1-11, и т.д.)
+- ✅ Допустимые игровые режимы и типы боёв
+- ✅ Структуру JSON файлов
+
+### Тестирование
+
+Тестовый набор включает 41 тест, покрывающих все аспекты валидации:
+
+```bash
+python tests/test_validator.py
+```
+
+Все тесты должны проходить успешно перед публикацией изменений.
+
+## 📋 Схемы данных
+
+Все типы данных описаны в JSON Schema формате в папке `schemas/`:
+
+| Схема | Описание |
+|-------|----------|
+| `player.schema.json` | Данные игрока |
+| `club.schema.json` | Данные клуба |
+| `battle.schema.json` | Записи о боях |
+| `trophy_history.schema.json` | История трофеев игрока |
+| `club_history.schema.json` | История клуба |
+| `player_rankings.schema.json` | Ежедневный рейтинг игроков |
+| `club_rankings.schema.json` | Ежедневный рейтинг клубов |
+| `team_stats.schema.json` | Командная статистика |
+| `team_code.schema.json` | Коды командных приглашений |
+| `map_stats.schema.json` | Статистика карт |
+
 ---
 
 **Связанные репозитории:**  
-- Основной проэкт: [ветка main](https://github.com/egoffn1/BrawlStatsBot/tree/main)  
-- Данные: [ветка brawl_data](https://github.com/egoffn1/BrawlStatsBot/tree/brawl_data)
+- Основной проект: [ветка main](https://github.com/egoffn1/BrawlNest/tree/main)  
+- Данные: [ветка brawl_data](https://github.com/egoffn1/BrawlNest/tree/brawl_data)
 ```
